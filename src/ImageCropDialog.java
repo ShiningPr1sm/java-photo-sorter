@@ -19,20 +19,14 @@ public class ImageCropDialog extends JDialog {
 
     private void initUI() {
         setLayout(new BorderLayout());
-
         cropPanel = new CropPanel(originalImage);
         JScrollPane scrollPane = new JScrollPane(cropPanel);
-
-        // Устанавливаем предпочтительный размер для JScrollPane
-        // Он будет соответствовать масштабированному изображению,
-        // которое уже учитывает размеры экрана
         scrollPane.setPreferredSize(cropPanel.getPreferredSize());
-
         add(scrollPane, BorderLayout.CENTER);
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton cropButton = new JButton("Обрезать");
-        JButton cancelButton = new JButton("Отмена");
+        JButton cropButton = new JButton("Cut");
+        JButton cancelButton = new JButton("Undo");
 
         cropButton.addActionListener(e -> {
             croppedImageResult = cropPanel.getCroppedImage();

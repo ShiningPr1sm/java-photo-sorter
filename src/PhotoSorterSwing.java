@@ -56,7 +56,6 @@ public class PhotoSorterSwing {
     }
 
     public PhotoSorterSwing() {
-
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
@@ -80,7 +79,6 @@ public class PhotoSorterSwing {
         previousFolder = null;
 
         List<File> imageList = new ArrayList<>();
-
         File[] allFiles = sourceFolder.listFiles((dir, name) -> name.toLowerCase().matches(".*\\.(jpg|png|jpeg)$"));
 
         if (allFiles != null) {
@@ -107,19 +105,15 @@ public class PhotoSorterSwing {
         );
 
         setupUIComponents();
-
         setupKeyBindings();
-
         updateImage();
         loadFolders(destinationFolder);
         printFolderTree(destinationFolder, "");
         updateFrameTitle();
-
         mainFrame.setVisible(true);
     }
 
     private void setupUIComponents() {
-
         JButton undoButton = new JButton("Undo (X)");
         JButton moveButton = new JButton("Move (C)");
         JButton createFolderButton = new JButton("Create Folder");
@@ -163,7 +157,6 @@ public class PhotoSorterSwing {
         mainPanel.add(controlPanel, BorderLayout.NORTH);
         mainPanel.add(centerPanel, BorderLayout.CENTER);
         mainPanel.add(folderButtonPanel, BorderLayout.SOUTH);
-
         mainFrame.add(mainPanel);
     }
 
@@ -171,11 +164,9 @@ public class PhotoSorterSwing {
         String fileName = (currentIndex < images.length && images[currentIndex] != null) ? images[currentIndex].getName() : "No image selected";
         String currentPath = currentFolder != null ? currentFolder.getAbsolutePath() : "";
         int photosLeft = Math.max(0, images.length - currentIndex);
-
         if (mainFrame != null) {
             mainFrame.setTitle("Photo Sorter | Photos Left: " + photosLeft + " | " + fileName + " | Current Folder: " + currentPath);
         }
-
         statusLabel.setText(isCurrentPhotoCropped ? "[CROPPED]" : " ");
     }
 
@@ -198,7 +189,6 @@ public class PhotoSorterSwing {
                 currentIndex++;
                 continue;
             }
-
             try {
                 BufferedImage originalImage = ImageIO.read(file);
                 if (Objects.isNull(originalImage)) {
@@ -206,7 +196,6 @@ public class PhotoSorterSwing {
                     currentIndex++;
                     continue;
                 }
-
                 int maxWidth = frameWidth - 50;
                 int maxHeight = frameHeight - 200;
 
@@ -318,7 +307,6 @@ public class PhotoSorterSwing {
     }
 
     private void recordNewActionAndNext(File sourceFile, File targetFile, boolean isDelete, boolean isSkip, Path backupPath) {
-
         if (!moveHistory.isEmpty()) {
             MoveAction previousAction = moveHistory.peek();
             if (Objects.nonNull(previousAction.backupPath) && Files.exists(previousAction.backupPath)) {
@@ -329,7 +317,6 @@ public class PhotoSorterSwing {
                 }
             }
         }
-
         MoveAction newAction = new MoveAction(targetFile, isDelete, isSkip, backupPath);
         moveHistory.push(newAction);
         nextImage();
@@ -337,6 +324,10 @@ public class PhotoSorterSwing {
 
     private void moveToSelectedFolder() {
         moveToFolder(currentFolder);
+        currentFolder = rootFolder;
+        previousFolder = null;
+        loadFolders(rootFolder);
+        updateFrameTitle();
     }
 
     private void moveToFolder(File destination) {
@@ -351,10 +342,10 @@ public class PhotoSorterSwing {
             File targetFile = new File(destination, sourceFile.getName());
             Path backupPath = null;
             File backupFileForCurrent = new File(sourceFile.getAbsolutePath() + ".bak");
+
             if (backupFileForCurrent.exists()) {
                 backupPath = backupFileForCurrent.toPath();
             }
-
             try {
                 Files.move(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 recordNewActionAndNext(sourceFile, targetFile, false, false, backupPath);
@@ -363,7 +354,6 @@ public class PhotoSorterSwing {
                 JOptionPane.showMessageDialog(mainFrame, "Failed to move file.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
-        loadFolders(rootFolder);
     }
 
     private void deletePhoto() {
@@ -393,7 +383,6 @@ public class PhotoSorterSwing {
     private void skipPhoto() {
         if (currentIndex < images.length) {
             File sourceFile = images[currentIndex];
-
             recordNewActionAndNext(sourceFile, sourceFile, false, true, null);
         }
     }
@@ -414,7 +403,6 @@ public class PhotoSorterSwing {
 
         boolean success = false;
         if (actionToUndo.wasSkip) {
-
             success = true;
         } else {
 
@@ -426,7 +414,6 @@ public class PhotoSorterSwing {
                     Files.copy(actionToUndo.backupPath, destinationInSource.toPath(), StandardCopyOption.REPLACE_EXISTING);
                     Files.delete(actionToUndo.backupPath);
                 }
-
                 if (actionToUndo.wasDelete) {
                     File deleteFolder = fileToMoveBack.getParentFile();
                     if (Objects.nonNull(deleteFolder) && deleteFolder.getName().startsWith("Delete_folder_")) {
@@ -444,7 +431,6 @@ public class PhotoSorterSwing {
                 moveHistory.push(actionToUndo);
             }
         }
-
         if (success) {
             currentIndex = Math.max(0, currentIndex - 1);
             updateImage();
@@ -453,11 +439,12 @@ public class PhotoSorterSwing {
 
     private void nextImage() {
         currentIndex++;
+        System.out.println("Next photo with index: " + currentIndex);
         updateImage();
     }
 
     private void createNewFolder() {
-        String folderName = JOptionPane.showInputDialog(mainFrame, "Enter new folder name:");
+        String folderName = JOptionPane.showInputDialog(mainFrame, "Enter new folder name: ");
         if (Objects.nonNull(folderName) && !folderName.trim().isEmpty()) {
             File newFolder = new File(currentFolder, folderName.trim());
             if (newFolder.mkdir()) {
@@ -475,7 +462,6 @@ public class PhotoSorterSwing {
         if (Objects.nonNull(folderArray)) {
             Arrays.sort(folderArray);
             for (File folder : folderArray) {
-
                 if (!folder.getName().startsWith("Delete_folder_") && !folder.getName().equals("Del")) {
                     folders.add(folder);
                 }
@@ -498,7 +484,6 @@ public class PhotoSorterSwing {
             upButton.addActionListener(e -> goBack());
             folderButtonPanel.add(upButton, 0);
         }
-
         folderButtonPanel.revalidate();
         folderButtonPanel.repaint();
     }
@@ -509,9 +494,7 @@ public class PhotoSorterSwing {
         if (currentFolderHasFolders(currentFolder)) {
             loadFolders(currentFolder);
         } else {
-
             moveToFolder(currentFolder);
-
             currentFolder = Objects.requireNonNullElse(previousFolder, rootFolder);
             loadFolders(currentFolder);
         }
@@ -520,7 +503,6 @@ public class PhotoSorterSwing {
 
     private void goBack() {
         if (currentFolder.equals(rootFolder)) {
-
             JOptionPane.showMessageDialog(mainFrame, "Already at the root folder.", "Navigation", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
@@ -528,7 +510,6 @@ public class PhotoSorterSwing {
         File parent = currentFolder.getParentFile();
         if (Objects.nonNull(parent)) {
             currentFolder = parent;
-
             previousFolder = currentFolder.getParentFile();
             loadFolders(currentFolder);
         }
@@ -575,7 +556,6 @@ public class PhotoSorterSwing {
                 System.err.println("Image file not found for cropping at index " + currentIndex);
                 return;
             }
-
             try {
                 BufferedImage originalImage = ImageIO.read(currentImageFile);
                 if (Objects.isNull(originalImage)) {
@@ -613,7 +593,6 @@ public class PhotoSorterSwing {
             JOptionPane.showMessageDialog(mainFrame, "Current image file not found.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
-
         File backupFile = new File(currentImageFile.getAbsolutePath() + ".bak");
         if (backupFile.exists()) {
             try {
@@ -649,9 +628,9 @@ public class PhotoSorterSwing {
         if (Objects.isNull(folder) || !folder.exists() || !folder.isDirectory()) {
             return;
         }
+
         File[] files = folder.listFiles();
         if (Objects.isNull(files)) return;
-
         List<File> directories = new ArrayList<>();
         List<File> imageFiles = new ArrayList<>();
 
@@ -692,13 +671,12 @@ public class PhotoSorterSwing {
     }
 
     private int calculateColumns() {
-
         int panelWidth = folderButtonPanel.getWidth();
         if (panelWidth == 0 && folderButtonPanel.getParent() != null) {
             panelWidth = folderButtonPanel.getParent().getWidth();
         }
-        if (panelWidth == 0) panelWidth = 800;
 
+        if (panelWidth == 0) panelWidth = 800;
         int buttonWidth = 120 + 5;
         return Math.max(1, panelWidth / buttonWidth);
     }

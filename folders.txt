@@ -1,2 +1,0 @@
-FROM:D:\SORT
-TO:D:\-s_data\NSFW_HUB

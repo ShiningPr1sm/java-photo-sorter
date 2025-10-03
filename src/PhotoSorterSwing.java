@@ -5,11 +5,14 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -40,6 +43,7 @@ public class PhotoSorterSwing {
     private final List<File> folders = new ArrayList<>();
     private final int frameHeight = 750;
     private final int frameWidth = 900;
+    private Path configFilePath;
 
     private static class MoveAction {
         final File movedFile;
@@ -60,20 +64,41 @@ public class PhotoSorterSwing {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             System.err.println("Failed to set Look and Feel: " + e.getMessage());
-            e.printStackTrace();
         }
-
         UIManager.put("Button.minimumWidth", 120);
         UIManager.put("Button.minimumHeight", 40);
         UIManager.put("Button.margin", new Insets(10, 20, 10, 20));
 
-        loadPathsFromConfig();
-        if (sourceFolder == null || destinationFolder == null || !sourceFolder.isDirectory() || !destinationFolder.isDirectory()) {
-            JOptionPane.showMessageDialog(null, "Invalid source or destination folder configured or folders do not exist.");
-            System.exit(1);
-            return;
-        }
+        boolean pathsAreValid;
+        File configFile = getConfigFilePath().toFile();
 
+        if (!configFile.exists()) {
+            if (!promptForInitialFolders()) {
+                System.exit(0);
+            }
+            pathsAreValid = true;
+        } else {
+            loadPathsFromConfig();
+            if (sourceFolder != null && sourceFolder.isDirectory() && destinationFolder != null && destinationFolder.isDirectory()) {
+                pathsAreValid = true;
+            } else {
+                JOptionPane.showMessageDialog(null, "The source folder or destination folder cannot be found.\n" +
+                        "Please select the folders again.", "Configuration error", JOptionPane.ERROR_MESSAGE);
+                if (!promptForInitialFolders()) {
+                    System.exit(0);
+                }
+                pathsAreValid = true;
+            }
+        }
+        if (pathsAreValid) {
+            initializeApplication();
+        } else {
+            System.err.println("The application could not be started due to incorrect paths.");
+            System.exit(1);
+        }
+    }
+
+    private void initializeApplication() {
         rootFolder = destinationFolder;
         currentFolder = destinationFolder;
         previousFolder = null;
@@ -85,13 +110,10 @@ public class PhotoSorterSwing {
             Collections.addAll(imageList, allFiles);
         }
         images = imageList.toArray(new File[0]);
-
         Arrays.sort(images);
 
         if (images.length == 0) {
             JOptionPane.showMessageDialog(null, "No images found in the source folder.");
-            System.exit(0);
-            return;
         }
 
         mainFrame = new JFrame("Photo Sorter");
@@ -104,6 +126,13 @@ public class PhotoSorterSwing {
                 frameHeight
         );
 
+        try {
+            Image icon = ImageIO.read(Objects.requireNonNull(PhotoSorterSwing.class.getResource("/project_icon.png")));
+            mainFrame.setIconImage(icon);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         setupUIComponents();
         setupKeyBindings();
         updateImage();
@@ -113,7 +142,119 @@ public class PhotoSorterSwing {
         mainFrame.setVisible(true);
     }
 
+    private Path getConfigFilePath() {
+        if (configFilePath == null) {
+            String appDataPath = System.getenv("APPDATA");
+            if (appDataPath == null || appDataPath.isEmpty()) {
+                appDataPath = System.getProperty("user.home");
+            }
+            Path configDir = Paths.get(appDataPath, "PhotoSorter");
+            try {
+                if (!Files.exists(configDir)) {
+                    Files.createDirectories(configDir);
+                }
+            } catch (IOException e) {
+                System.err.println("Unable to create configuration directory: " + configDir);
+                e.printStackTrace();
+                return Paths.get("folders.txt");
+            }
+            configFilePath = configDir.resolve("folders.txt");
+        }
+        return configFilePath;
+    }
+
+    private void savePathsToConfig(File source, File destination) {
+        Path configFile = getConfigFilePath();
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(configFile.toFile()))) {
+            writer.write("FROM: " + source.getAbsolutePath());
+            writer.newLine();
+            writer.write("TO: " + destination.getAbsolutePath());
+            writer.newLine();
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(null, "Error saving configuration: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void loadPathsFromConfig() {
+        File configFile = getConfigFilePath().toFile();
+        if (!configFile.exists()) {
+            return;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("FROM:")) {
+                    sourceFolder = new File(line.substring(5).trim());
+                } else if (line.startsWith("TO:")) {
+                    destinationFolder = new File(line.substring(3).trim());
+                }
+            }
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(null, "Error reading configuration file: " + e.getMessage());
+        }
+    }
+
+    private File chooseDirectory(String title) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle(title);
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+        if (chooser.showOpenDialog(mainFrame) == JFileChooser.APPROVE_OPTION) {
+            return chooser.getSelectedFile();
+        }
+        return null;
+    }
+
+    private boolean promptForInitialFolders() {
+        JOptionPane.showMessageDialog(null, "Welcome! Please select the source folder and the destination folder.", "Initial setup", JOptionPane.INFORMATION_MESSAGE);
+
+        File source = null;
+        while (source == null) {
+            source = chooseDirectory("Select the source folder (Where to sort from)");
+            if (source == null) {
+                int result = JOptionPane.showConfirmDialog(null, "The program requires a source folder to run. Do you want to exit?", "Confirmation of exit", JOptionPane.YES_NO_OPTION);
+                if (result == JOptionPane.YES_OPTION) return false;
+            }
+        }
+        sourceFolder = source;
+
+        File destination = null;
+        while (destination == null) {
+            destination = chooseDirectory("Select the destination folder (Where to sort)");
+            if (destination == null) {
+                int result = JOptionPane.showConfirmDialog(null, "The program requires a destination folder to run. Do you want to exit?", "Confirmation of exit", JOptionPane.YES_NO_OPTION);
+                if (result == JOptionPane.YES_OPTION) return false;
+            }
+        }
+        destinationFolder = destination;
+        savePathsToConfig(sourceFolder, destinationFolder);
+        return true;
+    }
+
+    private void changeFolder(boolean isSource) {
+        String title = isSource ? "Select a new source folder" : "Select a new destination folder";
+        File newFolder = chooseDirectory(title);
+
+        if (newFolder != null && newFolder.isDirectory()) {
+            if (isSource) {
+                sourceFolder = newFolder;
+            } else {
+                destinationFolder = newFolder;
+            }
+            savePathsToConfig(sourceFolder, destinationFolder);
+            JOptionPane.showMessageDialog(mainFrame, "The path to the folder has been updated. The application will restart.", "Restart", JOptionPane.INFORMATION_MESSAGE);
+
+            mainFrame.dispose();
+            SwingUtilities.invokeLater(PhotoSorterSwing::new);
+        }
+    }
+
     private void setupUIComponents() {
+        JButton selectSourceButton = new JButton("Select Source");
+        JButton selectDestButton = new JButton("Select Destination");
+        selectSourceButton.addActionListener(_ -> changeFolder(true));
+        selectDestButton.addActionListener(_ -> changeFolder(false));
+
         JButton undoButton = new JButton("Undo (X)");
         JButton moveButton = new JButton("Move (C)");
         JButton createFolderButton = new JButton("Create Folder");
@@ -123,16 +264,18 @@ public class PhotoSorterSwing {
         JButton cropButton = new JButton("Crop");
         JButton undoCropButton = new JButton("Undo Crop");
 
-        backButton.addActionListener(e -> { goBack(); mainFrame.requestFocusInWindow(); });
-        undoButton.addActionListener(e -> { undoMove(); mainFrame.requestFocusInWindow(); });
-        moveButton.addActionListener(e -> { moveToSelectedFolder(); mainFrame.requestFocusInWindow(); });
-        createFolderButton.addActionListener(e -> { createNewFolder(); mainFrame.requestFocusInWindow(); });
-        deleteButton.addActionListener(e -> { deletePhoto(); mainFrame.requestFocusInWindow(); });
-        skipButton.addActionListener(e -> { skipPhoto(); mainFrame.requestFocusInWindow(); });
-        cropButton.addActionListener(e -> { cropPhoto(); mainFrame.requestFocusInWindow(); });
-        undoCropButton.addActionListener(e -> { undoCrop(); mainFrame.requestFocusInWindow(); });
+        backButton.addActionListener(_ -> { goBack(); mainFrame.requestFocusInWindow(); });
+        undoButton.addActionListener(_ -> { undoMove(); mainFrame.requestFocusInWindow(); });
+        moveButton.addActionListener(_ -> { moveToSelectedFolder(); mainFrame.requestFocusInWindow(); });
+        createFolderButton.addActionListener(_ -> { createNewFolder(); mainFrame.requestFocusInWindow(); });
+        deleteButton.addActionListener(_ -> { deletePhoto(); mainFrame.requestFocusInWindow(); });
+        skipButton.addActionListener(_ -> { skipPhoto(); mainFrame.requestFocusInWindow(); });
+        cropButton.addActionListener(_ -> { cropPhoto(); mainFrame.requestFocusInWindow(); });
+        undoCropButton.addActionListener(_ -> { undoCrop(); mainFrame.requestFocusInWindow(); });
 
-        JPanel controlPanel = new JPanel();
+        JPanel controlPanel = new JPanel(new WrapLayout());
+        controlPanel.add(selectSourceButton);
+        controlPanel.add(selectDestButton);
         controlPanel.add(backButton);
         controlPanel.add(undoButton);
         controlPanel.add(moveButton);
@@ -161,25 +304,28 @@ public class PhotoSorterSwing {
     }
 
     private void updateFrameTitle() {
+        if (mainFrame == null) return;
         String fileName = (currentIndex < images.length && images[currentIndex] != null) ? images[currentIndex].getName() : "No image selected";
         String currentPath = currentFolder != null ? currentFolder.getAbsolutePath() : "";
         int photosLeft = Math.max(0, images.length - currentIndex);
-        if (mainFrame != null) {
-            mainFrame.setTitle("Photo Sorter | Photos Left: " + photosLeft + " | " + fileName + " | Current Folder: " + currentPath);
-        }
+        mainFrame.setTitle("Photo Sorter | Photos Left: " + photosLeft + " | " + fileName + " | Current Folder: " + currentPath);
         statusLabel.setText(isCurrentPhotoCropped ? "[CROPPED]" : " ");
     }
 
     private void updateImage() {
         isCurrentPhotoCropped = false;
+        if (images.length == 0) {
+            imageLabel.setIcon(null);
+            imageLabel.setText("No images found in the source folder. Please select another one.");
+            if (mainFrame != null) mainFrame.setTitle("Photo Sorter | No images");
+            return;
+        }
 
         if (currentIndex >= images.length) {
             imageLabel.setIcon(null);
             imageLabel.setText("No more images to sort.");
             statusLabel.setText(" ");
-            if (mainFrame != null) {
-                mainFrame.setTitle("Photo Sorter | Sorting complete");
-            }
+            if (mainFrame != null) mainFrame.setTitle("Photo Sorter | Sorting complete");
             return;
         }
 
@@ -198,22 +344,17 @@ public class PhotoSorterSwing {
                 }
                 int maxWidth = frameWidth - 50;
                 int maxHeight = frameHeight - 200;
-
                 int imgWidth = originalImage.getWidth();
                 int imgHeight = originalImage.getHeight();
-
                 double ratio = Math.min((double) maxWidth / imgWidth, (double) maxHeight / imgHeight);
-
                 int newWidth = (int) (imgWidth * ratio);
                 int newHeight = (int) (imgHeight * ratio);
 
                 BufferedImage scaledImage = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
                 Graphics2D g2d = scaledImage.createGraphics();
-
                 g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
                 g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
                 g2d.drawImage(originalImage, 0, 0, newWidth, newHeight, null);
                 g2d.dispose();
 
@@ -234,9 +375,7 @@ public class PhotoSorterSwing {
             imageLabel.setIcon(null);
             imageLabel.setText("No more images to sort.");
             statusLabel.setText(" ");
-            if (mainFrame != null) {
-                mainFrame.setTitle("Photo Sorter | Sorting complete");
-            }
+            if (mainFrame != null) mainFrame.setTitle("Photo Sorter | Sorting complete");
         }
     }
 
@@ -246,64 +385,28 @@ public class PhotoSorterSwing {
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, 0), "BACK_ACTION");
         actionMap.put("BACK_ACTION", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                goBack();
-            }
+            public void actionPerformed(ActionEvent e) { goBack(); }
         });
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_X, 0), "UNDO_ACTION");
         actionMap.put("UNDO_ACTION", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                undoMove();
-            }
+            public void actionPerformed(ActionEvent e) { undoMove(); }
         });
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, 0), "MOVE_ACTION");
         actionMap.put("MOVE_ACTION", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                moveToSelectedFolder();
-            }
+            public void actionPerformed(ActionEvent e) { moveToSelectedFolder(); }
         });
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_V, 0), "SKIP_ACTION");
         actionMap.put("SKIP_ACTION", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                skipPhoto();
-            }
+            public void actionPerformed(ActionEvent e) { skipPhoto(); }
         });
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_QUOTE, 0), "EMERGENCY_EXIT");
         actionMap.put("EMERGENCY_EXIT", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                System.exit(0);
-            }
+            public void actionPerformed(ActionEvent e) { System.exit(0); }
         });
-    }
-
-    private void loadPathsFromConfig() {
-        File configFile = new File("folders.txt");
-        if (!configFile.exists()) {
-            JOptionPane.showMessageDialog(null, "Config file 'folders.txt' not found in the application directory!");
-            return;
-        }
-        try (BufferedReader reader = new BufferedReader(new FileReader(configFile))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.startsWith("FROM:")) {
-                    sourceFolder = new File(line.substring(5).trim());
-                } else if (line.startsWith("TO:")) {
-                    destinationFolder = new File(line.substring(3).trim());
-                }
-            }
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(null, "Error reading config file: " + e.getMessage());
-            e.printStackTrace();
-        }
     }
 
     private void recordNewActionAndNext(File sourceFile, File targetFile, boolean isDelete, boolean isSkip, Path backupPath) {
@@ -405,7 +508,6 @@ public class PhotoSorterSwing {
         if (actionToUndo.wasSkip) {
             success = true;
         } else {
-
             File destinationInSource = new File(sourceFolder, fileToMoveBack.getName());
             try {
                 Files.move(fileToMoveBack.toPath(), destinationInSource.toPath(), StandardCopyOption.REPLACE_EXISTING);
@@ -426,7 +528,6 @@ public class PhotoSorterSwing {
                 success = true;
             } catch (IOException e) {
                 System.err.println("Undo failed for " + fileToMoveBack.getName() + ": " + e.getMessage());
-                e.printStackTrace();
                 JOptionPane.showMessageDialog(mainFrame, "Failed to undo move: " + e.getMessage(), "Undo Error", JOptionPane.ERROR_MESSAGE);
                 moveHistory.push(actionToUndo);
             }
@@ -439,7 +540,6 @@ public class PhotoSorterSwing {
 
     private void nextImage() {
         currentIndex++;
-        System.out.println("Next photo with index: " + currentIndex);
         updateImage();
     }
 
@@ -535,7 +635,6 @@ public class PhotoSorterSwing {
             return targetFile;
         } catch (IOException e) {
             System.err.println("Error moving " + file.getName() + " to bin: " + e.getMessage());
-            e.printStackTrace();
         }
         return null;
     }
@@ -580,7 +679,6 @@ public class PhotoSorterSwing {
                 }
             } catch (IOException ex) {
                 System.err.println("Error during image cropping: " + ex.getMessage());
-                ex.printStackTrace();
                 JOptionPane.showMessageDialog(mainFrame, "Error during image cropping: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -604,7 +702,6 @@ public class PhotoSorterSwing {
                 JOptionPane.showMessageDialog(mainFrame, "Crop operation undone.", "Undo Crop", JOptionPane.INFORMATION_MESSAGE);
             } catch (IOException ex) {
                 System.err.println("Error undoing crop: " + ex.getMessage());
-                ex.printStackTrace();
                 JOptionPane.showMessageDialog(mainFrame, "Error undoing crop: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         } else {
@@ -640,7 +737,6 @@ public class PhotoSorterSwing {
                     directories.add(file);
                 }
             } else {
-
                 if (file.getName().toLowerCase().matches(".*\\.(jpg|png|jpeg)$")) {
                     imageFiles.add(file);
                 }
@@ -666,10 +762,6 @@ public class PhotoSorterSwing {
         }
     }
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(PhotoSorterSwing::new);
-    }
-
     private int calculateColumns() {
         int panelWidth = folderButtonPanel.getWidth();
         if (panelWidth == 0 && folderButtonPanel.getParent() != null) {
@@ -681,44 +773,13 @@ public class PhotoSorterSwing {
         return Math.max(1, panelWidth / buttonWidth);
     }
 
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(PhotoSorterSwing::new);
+    }
+
     public class WrapLayout extends FlowLayout {
         public WrapLayout() {
             super(FlowLayout.LEFT, 10, 5);
-        }
-
-        @Override
-        public Dimension preferredLayoutSize(Container target) {
-            return layoutSize(target, true);
-        }
-
-        @Override
-        public Dimension minimumLayoutSize(Container target) {
-            return layoutSize(target, false);
-        }
-
-        private Dimension layoutSize(Container target, boolean preferred) {
-            synchronized (target.getTreeLock()) {
-                int targetWidth = target.getWidth();
-                if (targetWidth == 0) targetWidth = Integer.MAX_VALUE;
-                int hGap = getHgap(), vGap = getVgap();
-                int width = 0, height = vGap, rowWidth = 0, rowHeight = 0;
-                for (Component comp : target.getComponents()) {
-                    if (!comp.isVisible()) continue;
-                    Dimension d = preferred ? comp.getPreferredSize() : comp.getMinimumSize();
-                    if (rowWidth + d.width + hGap > targetWidth) {
-                        width = Math.max(width, rowWidth);
-                        height += rowHeight + vGap;
-                        rowWidth = 0;
-                        rowHeight = 0;
-                    }
-                    rowWidth += d.width + hGap;
-                    rowHeight = Math.max(rowHeight, d.height);
-                }
-                height += rowHeight;
-                width = Math.max(width, rowWidth);
-                Insets insets = target.getInsets();
-                return new Dimension(width + insets.left + insets.right, height + insets.top + insets.bottom);
-            }
         }
     }
 }

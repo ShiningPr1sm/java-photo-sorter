@@ -1,3 +1,5 @@
+package ua.shiningpr1sm.photosorter;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;

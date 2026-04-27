@@ -2,8 +2,9 @@
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
-target
+target/*
 .idea
+.continue
 
 ### Eclipse ###
 .apt_generated

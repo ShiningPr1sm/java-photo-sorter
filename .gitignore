@@ -3,6 +3,7 @@ out/
 !**/src/main/**/out/
 !**/src/test/**/out/
 target
+.idea
 
 ### Eclipse ###
 .apt_generated

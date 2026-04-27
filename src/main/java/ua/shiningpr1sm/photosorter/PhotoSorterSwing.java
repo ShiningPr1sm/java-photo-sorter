@@ -1,8 +1,17 @@
 package ua.shiningpr1sm.photosorter;
 
-import uk.co.caprica.vlcj.player.component.EmbeddedMediaPlayerComponent;
+import javafx.application.Platform;
+import javafx.embed.swing.JFXPanel;
+import javafx.scene.Group;
+import javafx.scene.Scene;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaException;
+import javafx.scene.media.MediaPlayer;
+import javafx.scene.media.MediaView;
+
 import javax.imageio.ImageIO;
 import javax.swing.*;
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -47,9 +56,10 @@ public class PhotoSorterSwing {
     private final JLabel imageLabel = new JLabel();
     private final JTextArea textPreview = new JTextArea();
 
-    private EmbeddedMediaPlayerComponent mediaPlayerComponent;
+    private final JFXPanel jfxPanel;
+    private MediaPlayer mediaPlayer;
+    private MediaView mediaView;
 
-    private final Dimension buttonSize = new Dimension(110, 40);
     private final JPanel videoControlsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
     private final JButton playPauseButton = new JButton("Play");
     private final JButton stopButton = new JButton("Stop");
@@ -58,47 +68,28 @@ public class PhotoSorterSwing {
     private final JPanel folderButtonPanel = new JPanel(new WrapLayout());
     private final List<File> folders = new ArrayList<>();
     private final int frameHeight = 880;
-    private final int frameWidth = 1230;
+    private final int frameWidth = 1050;
     private Path configFilePath;
-
-    private JSlider volumeSlider;
-    private JPanel rightPanel;
 
     private final JLabel fileSizeLabel = new JLabel();
     private final JLabel fileExtensionLabel = new JLabel();
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(PhotoSorterSwing::new);
-    }
-
-    private static class MoveAction {
-        final File movedFile;
-        final boolean wasDelete;
-        final boolean wasSkip;
-        final Path backupPath;
-
-        public MoveAction(File movedFile, boolean wasDelete, boolean wasSkip, Path backupPath) {
-            this.movedFile = movedFile;
-            this.wasDelete = wasDelete;
-            this.wasSkip = wasSkip;
-            this.backupPath = backupPath;
-        }
+    private record MoveAction(File movedFile, boolean wasDelete, boolean wasSkip, Path backupPath) {
     }
 
     public PhotoSorterSwing() {
+        jfxPanel = new JFXPanel();
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             System.err.println("Failed to set Look and Feel: " + e.getMessage());
         }
-
-        UIManager.put("Button.minimumWidth", 110);
+        UIManager.put("Button.minimumWidth", 120);
         UIManager.put("Button.minimumHeight", 40);
         UIManager.put("Button.margin", new Insets(10, 20, 10, 20));
-
-        playPauseButton.setPreferredSize(buttonSize);
-        stopButton.setPreferredSize(buttonSize);
-
+        Dimension videoButtonSize = new Dimension(120, 40);
+        playPauseButton.setPreferredSize(videoButtonSize);
+        stopButton.setPreferredSize(videoButtonSize);
         boolean pathsAreValid;
         File configFile = getConfigFilePath().toFile();
 
@@ -106,20 +97,17 @@ public class PhotoSorterSwing {
             if (promptForInitialFolders()) {
                 System.exit(0);
             }
-            pathsAreValid = true;
         } else {
             loadPathsFromConfig();
-            if (sourceFolder != null && sourceFolder.isDirectory() && destinationFolder != null && destinationFolder.isDirectory()) {
-                pathsAreValid = true;
-            } else {
+            if (sourceFolder == null || !sourceFolder.isDirectory() || destinationFolder == null || !destinationFolder.isDirectory()) {
                 JOptionPane.showMessageDialog(null, "The source folder or destination folder cannot be found.\n" +
                         "Please select the folders again.", "Configuration error", JOptionPane.ERROR_MESSAGE);
                 if (promptForInitialFolders()) {
                     System.exit(0);
                 }
-                pathsAreValid = true;
             }
         }
+        pathsAreValid = true;
         if (pathsAreValid) {
             initializeApplication();
         } else {
@@ -133,7 +121,7 @@ public class PhotoSorterSwing {
         currentFolder = destinationFolder;
         previousFolder = null;
         File[] allFiles = sourceFolder.listFiles((dir, name) ->
-                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|txt|mp4|mkv|avi|mov|webm)$"));
+                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|txt|mp4|m4v|m4a)$"));
         if (allFiles != null) {
             filesToSort = allFiles;
             Arrays.sort(filesToSort);
@@ -143,7 +131,6 @@ public class PhotoSorterSwing {
         if (filesToSort.length == 0) {
             JOptionPane.showMessageDialog(null, "No supported files found in the source folder.");
         }
-
         mainFrame = new JFrame("File Sorter");
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         mainFrame.setResizable(true);
@@ -161,20 +148,22 @@ public class PhotoSorterSwing {
         } catch (Exception e) {
             System.out.println("Icon not found. Proceeding without it.");
         }
+
         setupUIComponents();
         setupKeyBindings();
         updatePreview();
         loadFolders(destinationFolder);
         printFolderTree(destinationFolder, "");
         updateFrameTitle();
-        mainFrame.pack();
-        mainFrame.setSize(frameWidth, frameHeight);
         mainFrame.setVisible(true);
     }
 
     private void setupUIComponents() {
         JButton selectSourceButton = new JButton("Select Source");
         JButton selectDestButton = new JButton("Select Destination");
+        selectSourceButton.addActionListener(e -> changeFolder(true));
+        selectDestButton.addActionListener(e -> changeFolder(false));
+
         JButton undoButton = new JButton("Undo (X)");
         JButton moveButton = new JButton("Move (C)");
         JButton createFolderButton = new JButton("Create Folder");
@@ -183,6 +172,39 @@ public class PhotoSorterSwing {
         JButton skipButton = new JButton("Skip (V)");
         JButton cropButton = new JButton("Crop");
         JButton undoCropButton = new JButton("Undo Crop");
+
+        backButton.addActionListener(e -> {
+            goBack();
+            mainFrame.requestFocusInWindow();
+        });
+        undoButton.addActionListener(e -> {
+            undoMove();
+            mainFrame.requestFocusInWindow();
+        });
+        moveButton.addActionListener(e -> {
+            moveToSelectedFolder();
+            mainFrame.requestFocusInWindow();
+        });
+        createFolderButton.addActionListener(e -> {
+            createNewFolder();
+            mainFrame.requestFocusInWindow();
+        });
+        deleteButton.addActionListener(e -> {
+            deletePhoto();
+            mainFrame.requestFocusInWindow();
+        });
+        skipButton.addActionListener(e -> {
+            skipPhoto();
+            mainFrame.requestFocusInWindow();
+        });
+        cropButton.addActionListener(e -> {
+            cropPhoto();
+            mainFrame.requestFocusInWindow();
+        });
+        undoCropButton.addActionListener(e -> {
+            undoCrop();
+            mainFrame.requestFocusInWindow();
+        });
 
         JPanel controlPanel = new JPanel(new WrapLayout());
         controlPanel.add(selectSourceButton);
@@ -196,25 +218,9 @@ public class PhotoSorterSwing {
         controlPanel.add(cropButton);
         controlPanel.add(undoCropButton);
 
-        for (Component comp : controlPanel.getComponents()) {
-            if (comp instanceof JButton) {
-                comp.setPreferredSize(buttonSize);
-            }
-        }
-
-        selectSourceButton.addActionListener(e -> changeFolder(true));
-        selectDestButton.addActionListener(e -> changeFolder(false));
-        backButton.addActionListener(e -> { goBack(); mainFrame.requestFocusInWindow(); });
-        undoButton.addActionListener(e -> { undoMove(); mainFrame.requestFocusInWindow(); });
-        moveButton.addActionListener(e -> { moveToSelectedFolder(); mainFrame.requestFocusInWindow(); });
-        createFolderButton.addActionListener(e -> { createNewFolder(); mainFrame.requestFocusInWindow(); });
-        deleteButton.addActionListener(e -> { deletePhoto(); mainFrame.requestFocusInWindow(); });
-        skipButton.addActionListener(e -> { skipPhoto(); mainFrame.requestFocusInWindow(); });
-        cropButton.addActionListener(e -> { cropPhoto(); mainFrame.requestFocusInWindow(); });
-        undoCropButton.addActionListener(e -> { undoCrop(); mainFrame.requestFocusInWindow(); });
-
         folderButtonPanel.setLayout(new GridLayout(0, calculateColumns(), 5, 5));
         loadFolderButtons();
+
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 14f));
         statusLabel.setForeground(new Color(220, 50, 50));
@@ -245,34 +251,46 @@ public class PhotoSorterSwing {
         JScrollPane imageScrollPane = new JScrollPane(imageLabel);
         imageScrollPane.setBorder(null);
         previewPanel.add(imageScrollPane, "IMAGE");
-
         textPreview.setEditable(false);
         textPreview.setFont(new Font("Monospaced", Font.PLAIN, 14));
         JScrollPane textScrollPane = new JScrollPane(textPreview);
         textScrollPane.setBorder(null);
         previewPanel.add(textScrollPane, "TEXT");
+        previewPanel.add(jfxPanel, "VIDEO");
 
-        mediaPlayerComponent = new EmbeddedMediaPlayerComponent();
-        previewPanel.add(mediaPlayerComponent, "VIDEO");
+        Platform.runLater(() -> {
+            mediaView = new MediaView();
+            Group root = new Group(mediaView);
+            Scene scene = new Scene(root);
+            jfxPanel.setScene(scene);
+            mediaView.fitWidthProperty().bind(jfxPanel.getScene().widthProperty());
+            mediaView.fitHeightProperty().bind(jfxPanel.getScene().heightProperty());
+            mediaView.setPreserveRatio(true);
+        });
 
         playPauseButton.addActionListener(e -> {
-            if (mediaPlayerComponent.mediaPlayer().status().isPlayable()) {
-                mediaPlayerComponent.mediaPlayer().controls().pause();
+            if (mediaPlayer != null) {
+                MediaPlayer.Status status = mediaPlayer.getStatus();
+                if (status == MediaPlayer.Status.PLAYING) {
+                    mediaPlayer.pause();
+                } else if (status == MediaPlayer.Status.PAUSED ||
+                        status == MediaPlayer.Status.READY ||
+                        status == MediaPlayer.Status.STOPPED) {
+                    mediaPlayer.play();
+                }
             }
         });
         stopButton.addActionListener(e -> {
-            if (mediaPlayerComponent.mediaPlayer().status().isPlayable()) {
-                mediaPlayerComponent.mediaPlayer().controls().stop();
+            if (mediaPlayer != null) {
+                mediaPlayer.stop();
             }
         });
 
         videoControlsPanel.add(playPauseButton);
         videoControlsPanel.add(stopButton);
         videoControlsPanel.setVisible(false);
-
         previewPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 5));
         videoControlsPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
-        setupVolumeControl();
     }
 
     private String formatFileSize(long size) {
@@ -282,49 +300,19 @@ public class PhotoSorterSwing {
         return new DecimalFormat("#,##0.##").format(size / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
     }
 
-    private void setupVolumeControl() {
-        rightPanel = new JPanel(new BorderLayout(0, 5));
-        rightPanel.setBorder(BorderFactory.createEmptyBorder(10, 5, 10, 10));
-        JLabel volumeIconLabel = new JLabel();
-        volumeIconLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        try {
-            BufferedImage volIcon = ImageIO.read(Objects.requireNonNull(getClass().getResource("/volume_icon.png")));
-            volumeIconLabel.setIcon(new ImageIcon(volIcon));
-        } catch (Exception e) {
-            volumeIconLabel.setText("Vol");
-            System.err.println("Volume icon not found in resources.");
-        }
-
-        volumeSlider = new JSlider(JSlider.VERTICAL, 0, 100, 70);
-        volumeSlider.setMajorTickSpacing(25);
-        volumeSlider.setMinorTickSpacing(10);
-        volumeSlider.setPaintTicks(true);
-        volumeSlider.setPaintLabels(true);
-
-        volumeSlider.addChangeListener(e -> mediaPlayerComponent.mediaPlayer().audio().setVolume(volumeSlider.getValue()));
-
-        mediaPlayerComponent.mediaPlayer().audio().setVolume(volumeSlider.getValue());
-        rightPanel.add(volumeIconLabel, BorderLayout.NORTH);
-        rightPanel.add(volumeSlider, BorderLayout.CENTER);
-
-        rightPanel.setVisible(false);
-    }
-
     private void updatePreview() {
         isCurrentPhotoCropped = false;
         videoControlsPanel.setVisible(false);
-        if (rightPanel != null) {
-            rightPanel.setVisible(false);
-        }
         stopPlayback();
-
         if (filesToSort.length == 0 || currentIndex >= filesToSort.length) {
             imageLabel.setIcon(null);
             imageLabel.setText(filesToSort.length == 0 ? "No files found in the source folder." : "No more files to sort.");
             previewCardLayout.show(previewPanel, "IMAGE");
             fileSizeLabel.setText("");
             fileExtensionLabel.setText("");
-            if (mainFrame != null) mainFrame.setTitle("File Sorter | " + (filesToSort.length == 0 ? "No files" : "Sorting complete"));
+
+            if (mainFrame != null)
+                mainFrame.setTitle("File Sorter | " + (filesToSort.length == 0 ? "No files" : "Sorting complete"));
             statusLabel.setText(" ");
             return;
         }
@@ -341,13 +329,17 @@ public class PhotoSorterSwing {
 
         String extension = getFileExtension(file);
         switch (extension) {
-            case "jpg": case "jpeg": case "png":
+            case "jpg":
+            case "jpeg":
+            case "png":
                 showImagePreview(file);
                 break;
             case "txt":
                 showTextPreview(file);
                 break;
-            case "mp4": case "mkv": case "avi": case "mov": case "webm":
+            case "mp4":
+            case "m4v":
+            case "m4a":
                 showVideoPreview(file);
                 break;
             default:
@@ -359,22 +351,54 @@ public class PhotoSorterSwing {
 
     private void showVideoPreview(File file) {
         videoControlsPanel.setVisible(true);
-        if (rightPanel != null) {
-            rightPanel.setVisible(true);
-        }
         previewCardLayout.show(previewPanel, "VIDEO");
-        SwingUtilities.invokeLater(() -> new Thread(() -> {
-            boolean success = mediaPlayerComponent.mediaPlayer().media().start(file.getAbsolutePath());
-            if (!success) {
-                System.err.println("Failed to start media player for file: " + file.getAbsolutePath());
+        Platform.runLater(() -> {
+            try {
+                if (mediaPlayer != null) {
+                    mediaPlayer.stop();
+                    mediaPlayer.setOnError(null);
+                    mediaPlayer.setOnReady(null);
+                    mediaPlayer.dispose();
+                    mediaPlayer = null;
+                }
+
+                Media media = new Media(file.toURI().toString());
+                mediaPlayer = new MediaPlayer(media);
+                mediaPlayer.setOnError(() -> {
+                    MediaException error = mediaPlayer.getError();
+                    System.err.println("JavaFX MediaPlayer Error: " + error);
+                    mediaPlayer.dispose();
+                    SwingUtilities.invokeLater(() -> showUnsupportedPreview(file));
+                });
+
+                mediaPlayer.statusProperty().addListener((obs, oldStatus, newStatus) -> SwingUtilities.invokeLater(() -> playPauseButton.setText(newStatus == MediaPlayer.Status.PLAYING ? "Pause" : "Play")));
+
+                mediaPlayer.setOnReady(() -> SwingUtilities.invokeLater(() -> playPauseButton.setText("Play")));
+
+                mediaPlayer.setOnEndOfMedia(() -> {
+                    mediaPlayer.stop();
+                    mediaPlayer.seek(mediaPlayer.getStartTime());
+                    SwingUtilities.invokeLater(() -> playPauseButton.setText("Play"));
+                });
+                mediaView.setMediaPlayer(mediaPlayer);
+                mediaPlayer.setAutoPlay(true);
+            } catch (Exception e) {
+                System.err.println("Error creating JavaFX media: " + e.getMessage());
                 SwingUtilities.invokeLater(() -> showUnsupportedPreview(file));
             }
-        }).start());
+        });
     }
 
     private void stopPlayback() {
-        if (mediaPlayerComponent != null && mediaPlayerComponent.mediaPlayer().status().isPlaying()) {
-            mediaPlayerComponent.mediaPlayer().controls().stop();
+        if (mediaPlayer != null) {
+            Platform.runLater(() -> {
+                if (mediaView.getMediaPlayer() != null) {
+                    mediaView.getMediaPlayer().stop();
+                    mediaView.getMediaPlayer().dispose();
+                    mediaView.setMediaPlayer(null);
+                }
+            });
+            mediaPlayer = null;
         }
     }
 
@@ -506,98 +530,52 @@ public class PhotoSorterSwing {
         if (currentIndex >= filesToSort.length) return;
         File sourceFile = filesToSort[currentIndex];
         if (Objects.isNull(sourceFile) || !sourceFile.exists()) {
+            System.err.println("Source file does not exist at index " + currentIndex);
             nextFile();
             return;
         }
-
-        stopPlayback();
-
-        File targetFile = new File(destination, sourceFile.getName());
-        Path backupPath = null;
-        File backupFileForCurrent = new File(sourceFile.getAbsolutePath() + ".bak");
-        if (backupFileForCurrent.exists()) {
-            backupPath = backupFileForCurrent.toPath();
-        }
-
-        try {
-            Files.move(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            recordNewActionAndNext(targetFile, false, false, backupPath);
-        } catch (IOException e) {
-            System.err.println("Error moving file " + sourceFile.getName() + " to " + destination.getName() + ": " + e.getMessage());
-            JOptionPane.showMessageDialog(mainFrame, "Failed to move file: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        Runnable moveAction = () -> {
+            File targetFile = new File(destination, sourceFile.getName());
+            Path backupPath = null;
+            File backupFileForCurrent = new File(sourceFile.getAbsolutePath() + ".bak");
+            if (backupFileForCurrent.exists()) {
+                backupPath = backupFileForCurrent.toPath();
+            }
+            try {
+                Files.move(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                recordNewActionAndNext(targetFile, false, false, backupPath);
+            } catch (IOException e) {
+                System.err.println("Error moving file " + sourceFile.getName() + " to " + destination.getName() + ": " + e.getMessage());
+                JOptionPane.showMessageDialog(mainFrame, "Failed to move file: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                updatePreview();
+            }
+        };
+        stopPlaybackAndThen(moveAction);
     }
 
     private void deletePhoto() {
         if (currentIndex >= filesToSort.length) return;
         File photoToDelete = filesToSort[currentIndex];
         if (Objects.isNull(photoToDelete) || !photoToDelete.exists()) {
+            System.err.println("Photo to delete does not exist at index " + currentIndex);
             nextFile();
             return;
         }
-
-        stopPlayback();
-
-        Path backupPath = null;
-        File backupFileForCurrent = new File(photoToDelete.getAbsolutePath() + ".bak");
-        if (backupFileForCurrent.exists()) {
-            backupPath = backupFileForCurrent.toPath();
-        }
-
-        File binFile = moveToBin(photoToDelete);
-        if (Objects.nonNull(binFile)) {
-            recordNewActionAndNext(binFile, true, false, backupPath);
-        } else {
-            JOptionPane.showMessageDialog(mainFrame, "Failed to move photo to bin.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void undoMove() {
-        stopPlayback();
-        if (moveHistory.isEmpty()) {
-            JOptionPane.showMessageDialog(mainFrame, "No actions to undo.", "Undo", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-
-        MoveAction actionToUndo = moveHistory.pop();
-        File fileToMoveBack = actionToUndo.movedFile;
-
-        if (Objects.isNull(fileToMoveBack) || !fileToMoveBack.exists() && !actionToUndo.wasSkip) {
-            JOptionPane.showMessageDialog(mainFrame, "Original file for undo not found. Cannot undo.", "Undo Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        boolean success = false;
-        if (actionToUndo.wasSkip) {
-            success = true;
-        } else {
-            File destinationInSource = new File(sourceFolder, fileToMoveBack.getName());
-            try {
-                Files.move(fileToMoveBack.toPath(), destinationInSource.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                if (Objects.nonNull(actionToUndo.backupPath) && Files.exists(actionToUndo.backupPath)) {
-                    Files.copy(actionToUndo.backupPath, destinationInSource.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    Files.delete(actionToUndo.backupPath);
-                }
-                if (actionToUndo.wasDelete) {
-                    File deleteFolder = fileToMoveBack.getParentFile();
-                    if (Objects.nonNull(deleteFolder) && deleteFolder.getName().startsWith("Delete_folder_")) {
-                        File[] remainingFiles = deleteFolder.listFiles();
-                        if (Objects.nonNull(remainingFiles) && remainingFiles.length == 0) {
-                            Files.delete(deleteFolder.toPath());
-                        }
-                    }
-                }
-                success = true;
-            } catch (IOException e) {
-                System.err.println("Undo failed for " + fileToMoveBack.getName() + ": " + e.getMessage());
-                JOptionPane.showMessageDialog(mainFrame, "Failed to undo move: " + e.getMessage(), "Undo Error", JOptionPane.ERROR_MESSAGE);
-                moveHistory.push(actionToUndo);
+        Runnable deleteAction = () -> {
+            Path backupPath = null;
+            File backupFileForCurrent = new File(photoToDelete.getAbsolutePath() + ".bak");
+            if (backupFileForCurrent.exists()) {
+                backupPath = backupFileForCurrent.toPath();
             }
-        }
-        if (success) {
-            currentIndex = Math.max(0, currentIndex - 1);
-            updatePreview();
-        }
+            File binFile = moveToBin(photoToDelete);
+            if (Objects.nonNull(binFile)) {
+                recordNewActionAndNext(binFile, true, false, backupPath);
+            } else {
+                JOptionPane.showMessageDialog(mainFrame, "Failed to move photo to bin.", "Error", JOptionPane.ERROR_MESSAGE);
+                updatePreview();
+            }
+        };
+        stopPlaybackAndThen(deleteAction);
     }
 
     private void skipPhoto() {
@@ -605,6 +583,53 @@ public class PhotoSorterSwing {
             File sourceFile = filesToSort[currentIndex];
             recordNewActionAndNext(sourceFile, false, true, null);
         }
+    }
+
+    private void undoMove() {
+        Runnable undoAction = () -> {
+            if (moveHistory.isEmpty()) {
+                JOptionPane.showMessageDialog(mainFrame, "No actions to undo.", "Undo", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            MoveAction actionToUndo = moveHistory.pop();
+            File fileToMoveBack = actionToUndo.movedFile;
+            if (Objects.isNull(fileToMoveBack) || !fileToMoveBack.exists() && !actionToUndo.wasSkip) {
+                JOptionPane.showMessageDialog(mainFrame, "Original file for undo not found. Cannot undo.", "Undo Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            boolean success = false;
+            if (actionToUndo.wasSkip) {
+                success = true;
+            } else {
+                File destinationInSource = new File(sourceFolder, fileToMoveBack.getName());
+                try {
+                    Files.move(fileToMoveBack.toPath(), destinationInSource.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    if (Objects.nonNull(actionToUndo.backupPath) && Files.exists(actionToUndo.backupPath)) {
+                        Files.copy(actionToUndo.backupPath, destinationInSource.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        Files.delete(actionToUndo.backupPath);
+                    }
+                    if (actionToUndo.wasDelete) {
+                        File deleteFolder = fileToMoveBack.getParentFile();
+                        if (Objects.nonNull(deleteFolder) && deleteFolder.getName().startsWith("Delete_folder_")) {
+                            File[] remainingFiles = deleteFolder.listFiles();
+                            if (Objects.nonNull(remainingFiles) && remainingFiles.length == 0) {
+                                Files.delete(deleteFolder.toPath());
+                            }
+                        }
+                    }
+                    success = true;
+                } catch (IOException e) {
+                    System.err.println("Undo failed for " + fileToMoveBack.getName() + ": " + e.getMessage());
+                    JOptionPane.showMessageDialog(mainFrame, "Failed to undo move: " + e.getMessage(), "Undo Error", JOptionPane.ERROR_MESSAGE);
+                    moveHistory.push(actionToUndo);
+                }
+            }
+            if (success) {
+                currentIndex = Math.max(0, currentIndex - 1);
+                updatePreview();
+            }
+        };
+        stopPlaybackAndThen(undoAction);
     }
 
     private void nextFile() {
@@ -655,7 +680,6 @@ public class PhotoSorterSwing {
         folderButtonPanel.revalidate();
         folderButtonPanel.repaint();
     }
-
 
     private void selectFolder(File folder) {
         previousFolder = currentFolder;
@@ -837,6 +861,27 @@ public class PhotoSorterSwing {
         return Math.max(1, panelWidth / buttonWidth);
     }
 
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(PhotoSorterSwing::new);
+    }
+
+    private void stopPlaybackAndThen(Runnable actionAfterStop) {
+        if (mediaPlayer != null) {
+            final MediaPlayer playerToStop = mediaPlayer;
+            mediaPlayer = null;
+            Platform.runLater(() -> {
+                if (mediaView.getMediaPlayer() == playerToStop) {
+                    mediaView.setMediaPlayer(null);
+                }
+                playerToStop.stop();
+                playerToStop.dispose();
+                SwingUtilities.invokeLater(actionAfterStop);
+            });
+        } else {
+            actionAfterStop.run();
+        }
+    }
+
     public static class WrapLayout extends FlowLayout {
         public WrapLayout() {
             super(FlowLayout.LEFT, 10, 5);
@@ -874,6 +919,7 @@ public class PhotoSorterSwing {
                 }
             } catch (IOException e) {
                 System.err.println("Unable to create configuration directory: " + configDir);
+                e.printStackTrace();
                 return Paths.get("folders.txt");
             }
             configFilePath = configDir.resolve("folders.txt");

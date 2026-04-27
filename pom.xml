@@ -16,18 +16,26 @@
     </properties>
 
     <dependencies>
-        <!-- Основная библиотека VLCJ -->
+        <!-- Source: https://mvnrepository.com/artifact/org.openjfx/javafx-controls -->
         <dependency>
-            <groupId>uk.co.caprica</groupId>
-            <artifactId>vlcj</artifactId>
-            <version>4.8.2</version>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>24.0.1</version>
+            <scope>compile</scope>
         </dependency>
-
-        <!-- "Родные" библиотеки VLC (DLL-файлы), которые делают приложение самодостаточным -->
+        <!-- Source: https://mvnrepository.com/artifact/org.openjfx/javafx-media -->
         <dependency>
-            <groupId>uk.co.caprica</groupId>
-            <artifactId>vlcj-natives</artifactId>
-            <version>4.8.1</version>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
+            <version>24.0.1</version>
+            <scope>compile</scope>
+        </dependency>
+        <!-- Source: https://mvnrepository.com/artifact/org.openjfx/javafx-swing -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-swing</artifactId>
+            <version>24.0.1</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 

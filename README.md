@@ -36,12 +36,12 @@ Supported file extensions:
 
 ### Prerequisites
 * Windows 7/10/11;
-* FFmpeg will be automaticly downloaded.
 
 ### Download
-* You can download a .jar file or .exe from [Releases](https://github.com/ShiningPr1sm/file-organizer/releases);
+* You can download a `.jar` file or `.exe` from [Releases](https://github.com/ShiningPr1sm/file-organizer/releases);
 
 ### Acknowledgments
 A big thank you to my friend "FerdinandFoster" for conducting numerous tests and finding bugs in this program. Thanks to this, we’ve ended up with a fairly robust system with a minimal number of errors.
 
-If you find a bug, error, or typo, please submit a report in the [Issues](https://github.com/ShiningPr1sm/file-organizer/issues) section. Thank you very much for using this program!
+If you find a bug, error, or typo, please submit a report in the [Issues](https://github.com/ShiningPr1sm/file-organizer/issues) section. 
+Thank you very much for using this program! <3

@@ -133,7 +133,7 @@ public class FileOrganizerSwing {
         rootFolder = destinationFolder;
         currentFolder = destinationFolder;
         File[] allFiles = sourceFolder.listFiles((dir, name) ->
-                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
+                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
         if (allFiles != null) {
             filesToSort = allFiles;
             Arrays.sort(filesToSort);
@@ -452,7 +452,7 @@ public class FileOrganizerSwing {
         String extension = getFileExtension(file);
         if (extension.matches("jpg|jpeg|png|webp|ico")) {
             showImagePreview(file);
-        } else if (extension.equals("txt")) {
+        } else if (extension.matches("txt|md")) {
             showTextPreview(file);
         } else if (extension.matches("mp4|m4v|m4a|mov|avi|mkv|mp3")) {
             if (compatibilityModeCheckbox.isSelected()) {

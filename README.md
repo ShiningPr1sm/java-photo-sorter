@@ -14,6 +14,10 @@
 
 ---
 
+> [!WARNING]
+> Version 3.4.0 of the program is unstable. 
+> It may not have full access to all of the program's dependencies. If you encounter an error that prevents version 3.4.0 from running, please install the latest [release](https://github.com/ShiningPr1sm/file-organizer/releases).
+
 ## Overview
 The program allows you to sort files from a single main folder which has accumulated a large number of files into a master folder divided into multiple subfolders. The program uses Java version 21.0.11, FFmpeg.
 Supported file extensions:
@@ -31,13 +35,13 @@ Supported file extensions:
 ## Getting Started
 
 ### Prerequisites
-* Java version 21.0.11+;
-* FFmpeg will be automaticly downloaded.
+* Windows 7/10/11;
 
 ### Download
-* You can download a .jar file or .exe from [Releases](https://github.com/ShiningPr1sm/java-photo-sorter/releases);
+* You can download a `.jar` file or `.exe` from [Releases](https://github.com/ShiningPr1sm/file-organizer/releases);
 
 ### Acknowledgments
 A big thank you to my friend "FerdinandFoster" for conducting numerous tests and finding bugs in this program. Thanks to this, we’ve ended up with a fairly robust system with a minimal number of errors.
 
-If you find a bug, error, or typo, please submit a report in the [Issues](https://github.com/ShiningPr1sm/java-photo-sorter/issues) section. Thank you very much for using this program!
+If you find a bug, error, or typo, please submit a report in the [Issues](https://github.com/ShiningPr1sm/file-organizer/issues) section. 
+Thank you very much for using this program! <3

@@ -674,6 +674,19 @@ public class FileOrganizerSwing {
         }
     }
 
+    private void scheduleDeleteRetry(File file) {
+        if (file.delete()) return;
+
+        javax.swing.Timer retryTimer = new javax.swing.Timer(1000, null);
+        retryTimer.addActionListener(e -> {
+            if (file.delete() || !file.exists()) {
+                retryTimer.stop();
+            }
+        });
+        retryTimer.setRepeats(true);
+        retryTimer.start();
+    }
+
     private String formatFileSize(long size) {
         if (size <= 0) return "0 B";
         final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
@@ -811,13 +824,19 @@ public class FileOrganizerSwing {
         File bkp = new File(sourceFile.getAbsolutePath() + ".bak");
         if (bkp.exists())
             backupPath = bkp.toPath();
+        stopPlayback();
         try {
-            stopPlayback();
             Files.move(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            recordNewActionAndNext(targetFile, false, false, backupPath);
         } catch (IOException e) {
-            JOptionPane.showMessageDialog(mainFrame, "Move failed.");
+            try {
+                Files.copy(sourceFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                scheduleDeleteRetry(sourceFile);
+            } catch (IOException e2) {
+                JOptionPane.showMessageDialog(mainFrame, "Move failed.");
+                return;
+            }
         }
+        recordNewActionAndNext(targetFile, false, false, backupPath);
     }
 
     private void deletePhoto() {
@@ -844,12 +863,19 @@ public class FileOrganizerSwing {
         if (action.wasSkip) {
             currentIndex = Math.max(0, currentIndex - 1);
         } else {
+            File sourceFile = new File(sourceFolder, action.movedFile.getName());
             try {
-                Files.move(action.movedFile.toPath(), new File(sourceFolder, action.movedFile.getName()).toPath(), StandardCopyOption.REPLACE_EXISTING);
-                currentIndex = Math.max(0, currentIndex - 1);
+                Files.move(action.movedFile.toPath(), sourceFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
-                JOptionPane.showMessageDialog(mainFrame, "Undo failed.");
+                try {
+                    Files.copy(action.movedFile.toPath(), sourceFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    scheduleDeleteRetry(action.movedFile);
+                } catch (IOException e2) {
+                    JOptionPane.showMessageDialog(mainFrame, "Undo failed.");
+                    return;
+                }
             }
+            currentIndex = Math.max(0, currentIndex - 1);
         }
         updatePreview();
     }
@@ -923,7 +949,12 @@ public class FileOrganizerSwing {
             File uniqueDeleteFolder = new File(mainBinDir, "Delete_folder_" + deleteIndex);
             if (!uniqueDeleteFolder.exists()) uniqueDeleteFolder.mkdir();
             File targetFile = new File(uniqueDeleteFolder, file.getName());
-            Files.move(file.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(file.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                Files.copy(file.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                scheduleDeleteRetry(file);
+            }
             return targetFile;
         } catch (IOException e) {
             return null;

@@ -274,7 +274,14 @@ public class FileOrganizerSwing {
             int value = volumeSlider.getValue();
             double volume = value / 100.0;
             if (mediaPlayer != null) {
-                Platform.runLater(() -> mediaPlayer.setVolume(volume));
+                Platform.runLater(() -> {
+                    if (mediaPlayer != null) {
+                        mediaPlayer.setVolume(volume);
+                    }
+                });
+            }
+            if (compatibilityClip != null) {
+                setClipVolume(compatibilityClip, volume);
             }
             volumeSlider.getParent().repaint();
         });
@@ -321,14 +328,6 @@ public class FileOrganizerSwing {
 
         volumeSlider.setOpaque(true);
         volumeSlider.setDoubleBuffered(true);
-
-        volumeSlider.addChangeListener(e -> {
-            int value = volumeSlider.getValue();
-            double volume = value / 100.0;
-            if (mediaPlayer != null) {
-                Platform.runLater(() -> mediaPlayer.setVolume(volume));
-            }
-        });
 
         JLabel volLabel = new JLabel("Vol:");
         volLabel.setFont(new Font("Arial", Font.BOLD, 13));
@@ -471,8 +470,6 @@ public class FileOrganizerSwing {
         videoControlsPanel.setVisible(true);
         previewCardLayout.show(previewPanel, "VIDEO");
 
-        double currentVolume = volumeSlider.getValue() / 100.0;
-
         Platform.runLater(() -> {
             try {
                 if (mediaPlayer != null) {
@@ -483,6 +480,7 @@ public class FileOrganizerSwing {
                 Media media = new Media(file.toURI().toString());
                 mediaPlayer = new MediaPlayer(media);
 
+                double currentVolume = volumeSlider.getValue() / 100.0;
                 mediaPlayer.setVolume(currentVolume);
 
                 mediaPlayer.setOnEndOfMedia(() -> {
@@ -565,6 +563,8 @@ public class FileOrganizerSwing {
                     AudioInputStream ais = AudioSystem.getAudioInputStream(audioFile);
                     compatibilityClip = AudioSystem.getClip();
                     compatibilityClip.open(ais);
+                    double initialVolume = volumeSlider.getValue() / 100.0;
+                    setClipVolume(compatibilityClip, initialVolume);
                 }
 
                 SwingUtilities.invokeLater(() -> {
@@ -653,6 +653,24 @@ public class FileOrganizerSwing {
         File[] files = TEMP_FRAME_DIR.listFiles();
         if (files != null) {
             for (File f : files) f.delete();
+        }
+    }
+
+    private void setClipVolume(Clip clip, double volume) {
+        if (clip != null && clip.isOpen()) {
+            try {
+                FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+                float gain;
+                if (volume <= 0.0) {
+                    gain = gainControl.getMinimum();
+                } else {
+                    gain = (float) (Math.log10(volume) * 20.0);
+                    gain = Math.max(gainControl.getMinimum(), Math.min(gainControl.getMaximum(), gain));
+                }
+                gainControl.setValue(gain);
+            } catch (IllegalArgumentException e) {
+                // Some audio formats may not support MASTER_GAIN
+            }
         }
     }
 

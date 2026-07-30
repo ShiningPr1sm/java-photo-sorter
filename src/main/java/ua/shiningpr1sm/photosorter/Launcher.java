@@ -32,16 +32,10 @@ public class Launcher {
                         Path tempJar = Files.createTempFile("FileOrganizer-", ".jar");
                         updateManager.downloadRelease(release, tempJar);
 
-                        String downloadedVer = updateManager.readJarVersion(tempJar);
-                        if (downloadedVer == null || !downloadedVer.equals(release.version())) {
-                            System.err.println("Downloaded JAR version mismatch, aborting update");
-                            Files.deleteIfExists(tempJar);
-                        } else {
-                            System.out.println("Downloaded update v" + downloadedVer + ", restarting...");
-                            UpdateApplier updateApplier = new UpdateApplier();
-                            updateApplier.restartWithNewJar(tempJar);
-                            return;
-                        }
+                        System.out.println("Downloaded update, restarting...");
+                        UpdateApplier updateApplier = new UpdateApplier();
+                        updateApplier.restartWithNewJar(tempJar);
+                        return;
                     } catch (Exception e) {
                         System.err.println("Update failed: " + e.getMessage());
                         e.printStackTrace();

@@ -6,7 +6,7 @@
 
     <groupId>ua.shiningpr1sm</groupId>
     <artifactId>FileOrganizer</artifactId>
-    <version>3.4.1</version>
+    <version>3.5.0</version>
 
     <build>
         <resources>

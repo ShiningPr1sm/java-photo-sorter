@@ -1,11 +1,13 @@
 package ua.shiningpr1sm.photosorter;
 
+import com.formdev.flatlaf.FlatLightLaf;
 import javax.swing.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class Launcher {
     public static void main(String[] args) {
+        FlatLightLaf.setup();
         ConfigManager.initConfig();
         String currentVer = ConfigManager.getInternalVersion();
 

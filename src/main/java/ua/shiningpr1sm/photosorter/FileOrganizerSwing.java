@@ -4,6 +4,9 @@ import javafx.application.Platform;
 import javafx.embed.swing.JFXPanel;
 import javafx.scene.Scene;
 import javafx.scene.media.*;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 
 import javax.imageio.ImageIO;
 import javax.sound.sampled.*;
@@ -70,6 +73,7 @@ public class FileOrganizerSwing {
 
     private final JLabel fileSizeLabel = new JLabel();
     private final JLabel fileExtensionLabel = new JLabel();
+    private JPanel controlsWrapper;
 
     private JCheckBox compatibilityModeCheckbox;
     private javax.swing.Timer compatibilityTimer;
@@ -103,17 +107,13 @@ public class FileOrganizerSwing {
             TEMP_FRAME_DIR.mkdirs();
 
         jfxPanel = new JFXPanel();
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            System.err.println("Failed to set Look and Feel: " + e.getMessage());
-        }
 
-        UIManager.put("Button.minimumWidth", 120);
+        UIManager.put("Button.minimumWidth", 80);
         UIManager.put("Button.minimumHeight", 40);
         UIManager.put("Button.margin", new Insets(10, 20, 10, 20));
         UIManager.put("Button.focus", new Color(0, 0, 0, 0));
         UIManager.put("CheckBox.focus", new Color(0, 0, 0, 0));
+
         Dimension videoButtonSize = new Dimension(120, 40);
         playPauseButton.setPreferredSize(videoButtonSize);
 
@@ -147,7 +147,7 @@ public class FileOrganizerSwing {
         rootFolder = destinationFolder;
         currentFolder = destinationFolder;
         File[] allFiles = sourceFolder.listFiles((dir, name) ->
-                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|gif|pdf|doc|docx|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
+                name.toLowerCase().matches(".*\\.(bmp|jpg|png|jpeg|ico|txt|md|gif|pdf|doc|docx|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
         if (allFiles != null) {
             filesToSort = allFiles;
             Arrays.sort(filesToSort);
@@ -183,19 +183,30 @@ public class FileOrganizerSwing {
     }
 
     private void setupUIComponents() {
+        Dimension btnSize = new Dimension(120, 40);
         JButton selectSourceButton = new JButton("Select Source");
+        selectSourceButton.setPreferredSize(btnSize);
         JButton selectDestButton = new JButton("Select Destination");
+        selectDestButton.setPreferredSize(btnSize);
         selectSourceButton.addActionListener(e -> changeFolder(true));
         selectDestButton.addActionListener(e -> changeFolder(false));
 
         JButton undoButton = new JButton("Undo (X)");
+        undoButton.setPreferredSize(btnSize);
         JButton moveButton = new JButton("Move (C)");
+        moveButton.setPreferredSize(btnSize);
         JButton createFolderButton = new JButton("Create Folder");
+        createFolderButton.setPreferredSize(btnSize);
         JButton backButton = new JButton("Back (Z)");
+        backButton.setPreferredSize(btnSize);
         JButton deleteButton = new JButton("Del");
+        deleteButton.setPreferredSize(btnSize);
         JButton skipButton = new JButton("Skip (V)");
+        skipButton.setPreferredSize(btnSize);
         JButton cropButton = new JButton("Crop");
+        cropButton.setPreferredSize(btnSize);
         JButton undoCropButton = new JButton("Undo Crop");
+        undoCropButton.setPreferredSize(btnSize);
 
         backButton.addActionListener(e -> goBack());
         undoButton.addActionListener(e -> undoMove());
@@ -213,7 +224,7 @@ public class FileOrganizerSwing {
         compatibilityModeCheckbox.setFocusPainted(false);
         compatibilityModeCheckbox.setFocusable(false);
 
-        JPanel controlPanel = new JPanel(new WrapLayout());
+        JPanel controlPanel = new JPanel(new GridLayout(0, 5, 5, 5));
         controlPanel.add(selectSourceButton);
         controlPanel.add(selectDestButton);
         controlPanel.add(backButton);
@@ -245,7 +256,8 @@ public class FileOrganizerSwing {
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.add(topInfoPanel, BorderLayout.NORTH);
         centerPanel.add(previewPanel, BorderLayout.CENTER);
-        JPanel controlsWrapper = new JPanel(new CardLayout());
+        controlsWrapper = new JPanel(new CardLayout());
+        controlsWrapper.add(new JPanel(), "EMPTY");
         controlsWrapper.add(videoControlsPanel, "VIDEO");
         controlsWrapper.add(pdfControlsPanel, "PDF");
         centerPanel.add(controlsWrapper, BorderLayout.SOUTH);
@@ -494,8 +506,7 @@ public class FileOrganizerSwing {
 
     private void updatePreview() {
         isCurrentPhotoCropped = false;
-        videoControlsPanel.setVisible(false);
-        pdfControlsPanel.setVisible(false);
+        compatibilityModeCheckbox.setVisible(true);
         stopPlayback();
 
         if (compatibilityModeCheckbox.isSelected() && !FFMPEG_EXE.exists()) {
@@ -522,20 +533,35 @@ public class FileOrganizerSwing {
         fileSizeLabel.setText("Size: " + formatFileSize(file.length()));
         fileExtensionLabel.setText("Type: " + getFileExtension(file).toUpperCase());
 
+        CardLayout cl = (CardLayout) controlsWrapper.getLayout();
         String extension = getFileExtension(file);
-        if (extension.matches("jpg|jpeg|png|webp|ico|gif")) {
+        if (extension.matches("jpg|jpeg|png|webp|ico|bmp")) {
+            cl.show(controlsWrapper, "EMPTY");
+            compatibilityModeCheckbox.setVisible(false);
+            showImagePreview(file);
+        } else if (extension.equals("gif")) {
+            cl.show(controlsWrapper, "VIDEO");
+            compatibilityModeCheckbox.setVisible(true);
             showImagePreview(file);
         } else if (extension.matches("txt|md|doc|docx")) {
+            cl.show(controlsWrapper, "EMPTY");
+            compatibilityModeCheckbox.setVisible(false);
             showTextPreview(file);
         } else if (extension.matches("mp4|m4v|m4a|mov|avi|mkv|mp3")) {
+            cl.show(controlsWrapper, "VIDEO");
+            compatibilityModeCheckbox.setVisible(!extension.equals("mp3"));
             if (compatibilityModeCheckbox.isSelected()) {
                 showCompatibilityVideoPreview(file);
             } else {
                 showVideoPreview(file);
             }
         } else if (extension.equals("pdf")) {
+            cl.show(controlsWrapper, "PDF");
+            compatibilityModeCheckbox.setVisible(false);
             showPdfPreview(file);
         } else {
+            cl.show(controlsWrapper, "EMPTY");
+            compatibilityModeCheckbox.setVisible(false);
             showUnsupportedPreview(file);
         }
         updateFrameTitle();
@@ -1210,11 +1236,29 @@ public class FileOrganizerSwing {
     }
 
     private File chooseDirectory(String title) {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        if (chooser.showOpenDialog(mainFrame) == JFileChooser.APPROVE_OPTION)
-            return chooser.getSelectedFile();
-        return null;
+        CompletableFuture<File> future = new CompletableFuture<>();
+        Platform.runLater(() -> {
+            DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle(title);
+
+            Stage stage = new Stage();
+            stage.setWidth(0);
+            stage.setHeight(0);
+            stage.setOpacity(0);
+            stage.setTitle("");
+            javafx.geometry.Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+            stage.setX((screen.getWidth() / 2));
+            stage.setY((screen.getHeight() / 2));
+
+            File selected = chooser.showDialog(stage);
+            stage.close();
+            future.complete(selected);
+        });
+        try {
+            return future.get();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void createNewFolder() {
@@ -1303,7 +1347,7 @@ public class FileOrganizerSwing {
 
     public static class WrapLayout extends FlowLayout {
         public WrapLayout() {
-            super(FlowLayout.LEFT, 10, 5);
+            super(FlowLayout.CENTER, 5, 5);
         }
     }
 }

@@ -506,8 +506,15 @@ public class FileOrganizerSwing {
 
         if (filesToSort.length == 0 || currentIndex >= filesToSort.length) {
             imageLabel.setIcon(null);
-            imageLabel.setText("No files.");
+            imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            imageLabel.setVerticalAlignment(SwingConstants.CENTER);
+            imageLabel.setText("<html><div style='text-align:center; padding:80px 20px;'>" +
+                    "<div style='font-size:64px; color:#4CAF50;'>\u2713</div>" +
+                    "<div style='font-size:28px; color:#555; margin:15px 0; font-weight:bold;'>All files sorted!</div>" +
+                    "<div style='font-size:14px; color:#999;'>Use Undo (X) to go back or select a new folder.</div>" +
+                    "</div></html>");
             previewCardLayout.show(previewPanel, "IMAGE");
+            updateFrameTitle();
             return;
         }
 
@@ -918,9 +925,10 @@ public class FileOrganizerSwing {
     private void updateFrameTitle() {
         if (mainFrame == null)
             return;
-        String fileName = (currentIndex < filesToSort.length) ? filesToSort[currentIndex].getName() : "End";
+        boolean done = currentIndex >= filesToSort.length;
+        String fileName = done ? "Complete" : filesToSort[currentIndex].getName();
         int filesLeft = Math.max(0, filesToSort.length - currentIndex);
-        mainFrame.setTitle("File Organizer  |  v" + CURRENT_VERSION + "  |  File left: " + filesLeft + "  |  " + fileName);
+        mainFrame.setTitle("File Organizer  |  v" + CURRENT_VERSION + "  |  " + (done ? "Done" : "File left: " + filesLeft) + "  |  " + fileName);
         statusLabel.setText(isCurrentPhotoCropped ? "[CROPPED]" : " ");
     }
 

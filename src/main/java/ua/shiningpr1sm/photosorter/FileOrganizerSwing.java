@@ -133,7 +133,7 @@ public class FileOrganizerSwing {
         rootFolder = destinationFolder;
         currentFolder = destinationFolder;
         File[] allFiles = sourceFolder.listFiles((dir, name) ->
-                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
+                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|gif|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
         if (allFiles != null) {
             filesToSort = allFiles;
             Arrays.sort(filesToSort);
@@ -450,7 +450,7 @@ public class FileOrganizerSwing {
         fileExtensionLabel.setText("Type: " + getFileExtension(file).toUpperCase());
 
         String extension = getFileExtension(file);
-        if (extension.matches("jpg|jpeg|png|webp|ico")) {
+        if (extension.matches("jpg|jpeg|png|webp|ico|gif")) {
             showImagePreview(file);
         } else if (extension.matches("txt|md")) {
             showTextPreview(file);
@@ -696,6 +696,21 @@ public class FileOrganizerSwing {
 
     private void showImagePreview(File file) {
         try {
+            if (getFileExtension(file).equals("gif")) {
+                ImageIcon gifIcon = new ImageIcon(file.getAbsolutePath());
+                int maxWidth = Math.max(400, previewPanel.getWidth() - 50);
+                int maxHeight = Math.max(300, previewPanel.getHeight() - 250);
+                double ratio = Math.min((double) maxWidth / gifIcon.getIconWidth(),
+                        (double) maxHeight / gifIcon.getIconHeight());
+                int newWidth = (int) (gifIcon.getIconWidth() * ratio);
+                int newHeight = (int) (gifIcon.getIconHeight() * ratio);
+                Image scaled = gifIcon.getImage().getScaledInstance(newWidth, newHeight, Image.SCALE_DEFAULT);
+                imageLabel.setText(null);
+                imageLabel.setIcon(new ImageIcon(scaled));
+                previewCardLayout.show(previewPanel, "IMAGE");
+                return;
+            }
+
             BufferedImage originalImage;
 
             if (getFileExtension(file).equals("webp") || getFileExtension(file).equals("ico")) {

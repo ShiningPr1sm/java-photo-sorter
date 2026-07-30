@@ -24,6 +24,9 @@ import java.util.zip.*;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
+import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.hwpf.extractor.WordExtractor;
 
 public class FileOrganizerSwing {
     private File sourceFolder;
@@ -144,7 +147,7 @@ public class FileOrganizerSwing {
         rootFolder = destinationFolder;
         currentFolder = destinationFolder;
         File[] allFiles = sourceFolder.listFiles((dir, name) ->
-                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|gif|pdf|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
+                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|gif|pdf|doc|docx|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
         if (allFiles != null) {
             filesToSort = allFiles;
             Arrays.sort(filesToSort);
@@ -515,7 +518,7 @@ public class FileOrganizerSwing {
         String extension = getFileExtension(file);
         if (extension.matches("jpg|jpeg|png|webp|ico|gif")) {
             showImagePreview(file);
-        } else if (extension.matches("txt|md")) {
+        } else if (extension.matches("txt|md|doc|docx")) {
             showTextPreview(file);
         } else if (extension.matches("mp4|m4v|m4a|mov|avi|mkv|mp3")) {
             if (compatibilityModeCheckbox.isSelected()) {
@@ -883,7 +886,22 @@ public class FileOrganizerSwing {
 
     private void showTextPreview(File file) {
         try {
-            textPreview.setText(Files.readString(file.toPath()));
+            String ext = getFileExtension(file);
+            String text;
+            if (ext.equals("docx")) {
+                try (FileInputStream fis = new FileInputStream(file);
+                     XWPFWordExtractor extractor = new XWPFWordExtractor(new XWPFDocument(fis))) {
+                    text = extractor.getText();
+                }
+            } else if (ext.equals("doc")) {
+                try (FileInputStream fis = new FileInputStream(file);
+                     WordExtractor extractor = new WordExtractor(fis)) {
+                    text = extractor.getText();
+                }
+            } else {
+                text = Files.readString(file.toPath());
+            }
+            textPreview.setText(text);
             textPreview.setCaretPosition(0);
             previewCardLayout.show(previewPanel, "TEXT");
         } catch (Exception e) {

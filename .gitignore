@@ -3,8 +3,9 @@ out/
 !**/src/main/**/out/
 !**/src/test/**/out/
 target/
-.idea
-.continue
+.idea/
+.continue/
+dependency-reduced-pom.xml
 
 ### Eclipse ###
 .apt_generated

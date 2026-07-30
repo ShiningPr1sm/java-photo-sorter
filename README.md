@@ -16,15 +16,15 @@
 
 > [!WARNING]
 > Version 3.4.0 of the program is unstable. 
-> It may not have full access to all of the program's dependencies. If you encounter an error that prevents version 3.4.0 from running, please install the latest [release](https://github.com/ShiningPr1sm/file-organizer/releases).
+> It may not have full access to all of the program's dependencies. If you encounter an error that prevents version 3.4.0 from running, please install the latest [release](https://github.com/ShiningPr1sm/file-organizer/releases). (Recommended to download a 3.5.0+ version)
 
 ## Overview
 The program allows you to sort files from a single main folder which has accumulated a large number of files into a master folder divided into multiple subfolders. The program uses Java version 21.0.11, FFmpeg.
 Supported file extensions:
-* Photo: jpg, png, jpeg, webp, ico;
-* Video: mp4, m4v, mov, avi, mkv;
-* Audio: m4a, mp3;
-* Text: txt;
+* Photo: `.gif`, `.jpg`, `.png`, `.jpeg`, `.webp`, `.ico`, `.bmp`;
+* Video: `.mp4`, `.m4v`, `.mov`, `.avi`, `.mkv`;
+* Audio: `.m4a`, `.mp3`;
+* Text: `.txt`, `.md`, `.doc`, `.docx`, `.pdf`;
 
 
 ## Key Features

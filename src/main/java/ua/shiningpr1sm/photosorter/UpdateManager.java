@@ -1,16 +1,12 @@
 package ua.shiningpr1sm.photosorter;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Properties;
-import java.util.jar.JarEntry;
-import java.util.jar.JarFile;
 
 public class UpdateManager {
 
@@ -115,20 +111,6 @@ public class UpdateManager {
 
         if (response.statusCode() != 200) {
             throw new IOException("Download failed with code: " + response.statusCode());
-        }
-    }
-
-    public String readJarVersion(Path jarPath) {
-        try (JarFile jar = new JarFile(jarPath.toFile())) {
-            JarEntry entry = jar.getJarEntry("project.properties");
-            if (entry == null) return null;
-            try (InputStream is = jar.getInputStream(entry)) {
-                Properties props = new Properties();
-                props.load(is);
-                return props.getProperty("app.version");
-            }
-        } catch (Exception e) {
-            return null;
         }
     }
 }

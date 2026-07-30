@@ -22,6 +22,9 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.zip.*;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
+
 public class FileOrganizerSwing {
     private File sourceFolder;
     private File destinationFolder;
@@ -71,6 +74,14 @@ public class FileOrganizerSwing {
     private int compFrameIndex = 0;
     private final File TEMP_FRAME_DIR;
     private Clip compatibilityClip;
+
+    private PDDocument pdfDocument;
+    private int currentPdfPage;
+    private int totalPdfPages;
+    private final JPanel pdfControlsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 0));
+    private final JButton pdfPrevButton = new JButton("<");
+    private final JButton pdfNextButton = new JButton(">");
+    private final JLabel pdfPageLabel = new JLabel();
 
     private static final String COMPANY_NAME = "ShiningPr1sm";
     private static final String APPDATA = System.getenv("APPDATA");
@@ -133,7 +144,7 @@ public class FileOrganizerSwing {
         rootFolder = destinationFolder;
         currentFolder = destinationFolder;
         File[] allFiles = sourceFolder.listFiles((dir, name) ->
-                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|gif|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
+                name.toLowerCase().matches(".*\\.(jpg|png|jpeg|ico|txt|md|gif|pdf|mp4|m4v|m4a|mov|avi|mkv|mp3|webp)$"));
         if (allFiles != null) {
             filesToSort = allFiles;
             Arrays.sort(filesToSort);
@@ -231,7 +242,10 @@ public class FileOrganizerSwing {
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.add(topInfoPanel, BorderLayout.NORTH);
         centerPanel.add(previewPanel, BorderLayout.CENTER);
-        centerPanel.add(videoControlsPanel, BorderLayout.SOUTH);
+        JPanel controlsWrapper = new JPanel(new CardLayout());
+        controlsWrapper.add(videoControlsPanel, "VIDEO");
+        controlsWrapper.add(pdfControlsPanel, "PDF");
+        centerPanel.add(controlsWrapper, BorderLayout.SOUTH);
 
         mainPanel = new JPanel(new BorderLayout());
         mainPanel.add(controlPanel, BorderLayout.NORTH);
@@ -242,6 +256,7 @@ public class FileOrganizerSwing {
 
     private void setupPreviewPanel() {
         JScrollPane imageScrollPane = new JScrollPane(imageLabel);
+        imageScrollPane.getVerticalScrollBar().setUnitIncrement(48);
         imageScrollPane.setBorder(null);
         previewPanel.add(imageScrollPane, "IMAGE");
         textPreview.setEditable(false);
@@ -338,6 +353,53 @@ public class FileOrganizerSwing {
         videoControlsPanel.add(volumeSlider);
 
         videoControlsPanel.setVisible(false);
+
+        pdfControlsPanel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+
+        stylePdfButton(pdfPrevButton);
+        stylePdfButton(pdfNextButton);
+
+        pdfPageLabel.setFont(new Font("Arial", Font.BOLD, 13));
+        pdfPageLabel.setForeground(new Color(60, 60, 60));
+        pdfPageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        pdfPrevButton.addActionListener(e -> {
+            if (pdfDocument != null && currentPdfPage > 0) {
+                currentPdfPage--;
+                renderPdfPage();
+            }
+        });
+
+        pdfNextButton.addActionListener(e -> {
+            if (pdfDocument != null && currentPdfPage < totalPdfPages - 1) {
+                currentPdfPage++;
+                renderPdfPage();
+            }
+        });
+
+        pdfControlsPanel.add(pdfPrevButton);
+        pdfControlsPanel.add(pdfPageLabel);
+        pdfControlsPanel.add(pdfNextButton);
+
+        pdfControlsPanel.setVisible(false);
+    }
+
+    private void stylePdfButton(JButton button) {
+        button.setPreferredSize(new Dimension(40, 35));
+        button.setBackground(new Color(190, 185, 185));
+        button.setForeground(Color.BLACK);
+        button.setFont(new Font("Arial", Font.BOLD, 18));
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createEmptyBorder());
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(190, 170, 170));
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                button.setBackground(new Color(190, 185, 185));
+            }
+        });
     }
 
     private void styleVideoButton(JButton button) {
@@ -430,6 +492,7 @@ public class FileOrganizerSwing {
     private void updatePreview() {
         isCurrentPhotoCropped = false;
         videoControlsPanel.setVisible(false);
+        pdfControlsPanel.setVisible(false);
         stopPlayback();
 
         if (compatibilityModeCheckbox.isSelected() && !FFMPEG_EXE.exists()) {
@@ -460,6 +523,8 @@ public class FileOrganizerSwing {
             } else {
                 showVideoPreview(file);
             }
+        } else if (extension.equals("pdf")) {
+            showPdfPreview(file);
         } else {
             showUnsupportedPreview(file);
         }
@@ -613,6 +678,43 @@ public class FileOrganizerSwing {
         playPauseButton.setText("Pause");
     }
 
+    private void showPdfPreview(File file) {
+        currentPdfPage = 0;
+        totalPdfPages = 0;
+        try {
+            pdfDocument = org.apache.pdfbox.Loader.loadPDF(file);
+            totalPdfPages = pdfDocument.getNumberOfPages();
+            renderPdfPage();
+            imageLabel.setHorizontalAlignment(SwingConstants.LEFT);
+            imageLabel.setVerticalAlignment(SwingConstants.TOP);
+            pdfControlsPanel.setVisible(true);
+            previewCardLayout.show(previewPanel, "IMAGE");
+        } catch (IOException e) {
+            showUnsupportedPreview(file);
+        }
+    }
+
+    private void renderPdfPage() {
+        if (pdfDocument == null) return;
+        try {
+            org.apache.pdfbox.pdmodel.PDPage page = pdfDocument.getPage(currentPdfPage);
+            org.apache.pdfbox.pdmodel.common.PDRectangle mediaBox = page.getMediaBox();
+            float pageWidthPt = mediaBox.getWidth();
+            int viewWidth = Math.max(400, previewPanel.getWidth() - 50);
+            float dpi = viewWidth * 72f / pageWidthPt;
+            dpi = Math.max(72, Math.min(dpi, 200));
+            PDFRenderer renderer = new PDFRenderer(pdfDocument);
+            BufferedImage pageImage = renderer.renderImageWithDPI(currentPdfPage, dpi);
+            imageLabel.setIcon(new ImageIcon(pageImage));
+            imageLabel.setText(null);
+            pdfPageLabel.setText((currentPdfPage + 1) + " / " + totalPdfPages);
+            pdfPrevButton.setEnabled(currentPdfPage > 0);
+            pdfNextButton.setEnabled(currentPdfPage < totalPdfPages - 1);
+        } catch (IOException e) {
+            imageLabel.setText("Error rendering PDF page.");
+        }
+    }
+
     private void stopPlayback() {
         if (currentFfmpegProcess != null && currentFfmpegProcess.isAlive()) {
             currentFfmpegProcess.destroyForcibly();
@@ -642,6 +744,14 @@ public class FileOrganizerSwing {
 
         compatibilityFrames.clear();
         clearTempFrames();
+
+        if (pdfDocument != null) {
+            try {
+                pdfDocument.close();
+            } catch (IOException ignored) {
+            }
+            pdfDocument = null;
+        }
 
         imageLabel.setIcon(null);
         imageLabel.setText("");
@@ -695,6 +805,8 @@ public class FileOrganizerSwing {
     }
 
     private void showImagePreview(File file) {
+        imageLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        imageLabel.setVerticalAlignment(SwingConstants.CENTER);
         try {
             if (getFileExtension(file).equals("gif")) {
                 ImageIcon gifIcon = new ImageIcon(file.getAbsolutePath());

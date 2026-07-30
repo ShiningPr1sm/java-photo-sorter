@@ -87,5 +87,11 @@
             <artifactId>commonmark</artifactId>
             <version>0.24.0</version>
         </dependency>
+
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.2</version>
+        </dependency>
     </dependencies>
 </project>

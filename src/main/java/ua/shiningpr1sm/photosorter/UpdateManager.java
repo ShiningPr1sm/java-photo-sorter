@@ -1,5 +1,8 @@
 package ua.shiningpr1sm.photosorter;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,90 +14,66 @@ import java.time.Duration;
 public class UpdateManager {
 
     private static final String API_URL = "https://api.github.com/repos/ShiningPr1sm/File-Organizer/releases/latest";
-
-    private final HttpClient client;
-
-    public UpdateManager() {
-        this.client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .followRedirects(HttpClient.Redirect.ALWAYS)
-                .build();
-    }
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public record ReleaseInfo(String version, String notesMarkdown, String downloadUrl) {}
 
-    public ReleaseInfo fetchLatestRelease() throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_URL))
-                .header("Accept", "application/vnd.github+json")
-                .timeout(Duration.ofSeconds(10))
-                .build();
+    public ReleaseInfo fetchLatestRelease() {
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(API_URL))
+                    .header("Accept", "application/vnd.github+json")
+                    .timeout(Duration.ofSeconds(10))
+                    .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) return null;
 
-        if (response.statusCode() != 200) return null;
+            JsonNode root = MAPPER.readTree(response.body());
 
-        String body = response.body();
+            String tagName = root.path("tag_name").asText(null);
+            if (tagName == null) return null;
+            String version = tagName.startsWith("v") ? tagName.substring(1) : tagName;
 
-        String version = null;
-        int tagIdx = body.indexOf("\"tag_name\":");
-        if (tagIdx != -1) {
-            int start = body.indexOf("\"", tagIdx + 11) + 1;
-            int end = body.indexOf("\"", start);
-            version = body.substring(start, end).replaceFirst("^v", "");
-        }
+            String notes = root.path("body").asText("");
 
-        String notes = null;
-        int bodyIdx = body.indexOf("\"body\":");
-        if (bodyIdx != -1) {
-            int start = body.indexOf("\"", bodyIdx + 7) + 1;
-            int end = body.indexOf("\"", start);
-            if (end > start) {
-                notes = body.substring(start, end)
-                        .replace("\\r\\n", "\n")
-                        .replace("\\n", "\n")
-                        .replace("\\\"", "\"");
-            }
-        }
-
-        if (version == null) return null;
-
-        String downloadUrl = null;
-        int assetsIdx = body.indexOf("\"assets\":");
-        if (assetsIdx != -1) {
-            int start = body.indexOf("[", assetsIdx + 8);
-            if (start != -1) {
-                int end = body.indexOf("]", start);
-                if (end > start) {
-                    String assetsSection = body.substring(start, end + 1);
-                    int jarIdx = assetsSection.indexOf("\".jar\"");
-                    if (jarIdx != -1) {
-                        int urlIdx = assetsSection.lastIndexOf("\"browser_download_url\":", jarIdx);
-                        if (urlIdx != -1) {
-                            int urlStart = assetsSection.indexOf("\"", urlIdx + 22) + 1;
-                            int urlEnd = assetsSection.indexOf("\"", urlStart);
-                            if (urlEnd > urlStart) {
-                                downloadUrl = assetsSection.substring(urlStart, urlEnd)
-                                        .replace("\\/", "/");
-                            }
-                        }
-                    }
+            String downloadUrl = null;
+            for (JsonNode asset : root.path("assets")) {
+                String name = asset.path("name").asText("");
+                if (name.endsWith(".jar")) {
+                    downloadUrl = asset.path("browser_download_url").asText(null);
+                    break;
                 }
             }
-        }
+            if (downloadUrl == null) return null;
 
-        return new ReleaseInfo(version, notes, downloadUrl);
+            return new ReleaseInfo(version, notes, downloadUrl);
+        } catch (Exception e) {
+            System.err.println("UpdateManager: failed to fetch release: " + e.getMessage());
+            return null;
+        }
     }
 
     public int compareVersions(String v1, String v2) {
         String[] a = v1.split("\\.");
         String[] b = v2.split("\\.");
         for (int i = 0; i < Math.max(a.length, b.length); i++) {
-            int x = i < a.length ? Integer.parseInt(a[i]) : 0;
-            int y = i < b.length ? Integer.parseInt(b[i]) : 0;
+            int x = i < a.length ? parsePart(a[i]) : 0;
+            int y = i < b.length ? parsePart(b[i]) : 0;
             if (x != y) return Integer.compare(x, y);
         }
         return 0;
+    }
+
+    private int parsePart(String part) {
+        try {
+            return Integer.parseInt(part.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     public void downloadRelease(ReleaseInfo release, Path target) throws IOException, InterruptedException {
@@ -102,6 +81,10 @@ public class UpdateManager {
             throw new IOException("No download URL available in release data");
         }
 
+        HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.ALWAYS)
+                .connectTimeout(Duration.ofSeconds(15))
+                .build();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(release.downloadUrl()))
                 .timeout(Duration.ofSeconds(60))

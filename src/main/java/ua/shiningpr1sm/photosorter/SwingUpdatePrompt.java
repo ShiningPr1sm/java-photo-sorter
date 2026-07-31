@@ -6,10 +6,10 @@ import java.awt.*;
 
 public class SwingUpdatePrompt {
 
-    public enum Choice { UPDATE, SKIP, CANCEL }
+    public enum Choice {UPDATE, SKIP, CANCEL}
 
     public static Choice show(String currentVersion, String newVersion, String notesHtml) {
-        Choice[] result = { Choice.CANCEL };
+        Choice[] result = {Choice.CANCEL};
 
         JDialog dialog = new JDialog();
         dialog.setTitle("Update Available");
@@ -40,8 +40,14 @@ public class SwingUpdatePrompt {
         editorPane.setEditable(false);
         editorPane.setOpaque(false);
         editorPane.setCaret(new javax.swing.text.DefaultCaret() {
-            @Override public void paint(Graphics g) {}
-            @Override public boolean isVisible() { return false; }
+            @Override
+            public void paint(Graphics g) {
+            }
+
+            @Override
+            public boolean isVisible() {
+                return false;
+            }
         });
         editorPane.setHighlighter(null);
 
@@ -80,7 +86,7 @@ public class SwingUpdatePrompt {
         topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
         header.setAlignmentX(Component.CENTER_ALIGNMENT);
         versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        whatsNewLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        whatsNewLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         topPanel.add(header);
         topPanel.add(versionLabel);
         topPanel.add(whatsNewLabel);

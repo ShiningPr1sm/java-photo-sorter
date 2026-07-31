@@ -1,14 +1,15 @@
 package ua.shiningpr1sm.photosorter;
 
-import org.commonmark.parser.Parser;
-import org.commonmark.renderer.html.HtmlRenderer;
-
 public class MarkdownUtil {
-
-    public static String toHtml(String markdown) {
-        if (markdown == null || markdown.isBlank()) return "<p>No release notes available.</p>";
-        Parser parser = Parser.builder().build();
-        HtmlRenderer renderer = HtmlRenderer.builder().build();
-        return renderer.render(parser.parse(markdown));
+    public static String toPlainText(String markdown) {
+        if (markdown == null) return "(no release notes)";
+        String result = markdown
+                .replaceAll("(?m)^#{1,6}\\s*", "")
+                .replaceAll("\\*\\*(.*?)\\*\\*", "$1")
+                .replaceAll("\\*(.*?)\\*", "$1")
+                .replaceAll("`([^`]*)`", "$1")
+                .replaceAll("(?m)^[-*]\\s+", "• ")
+                .trim();
+        return result.isEmpty() ? "(no release notes)" : result;
     }
 }

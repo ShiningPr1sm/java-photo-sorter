@@ -102,6 +102,12 @@ public class FileOrganizerSwing {
     }
 
     public FileOrganizerSwing() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         TEMP_FRAME_DIR = new File(SHARED_ROOT, "temp_frames");
         if (!TEMP_FRAME_DIR.exists())
             TEMP_FRAME_DIR.mkdirs();
